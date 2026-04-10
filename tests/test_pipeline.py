@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
@@ -124,3 +125,39 @@ def test_add_weather_features_stubbed(tmp_path: Path, monkeypatch) -> None:
     assert "temp_la" in out.columns
     assert "temp_sf" in out.columns
     assert "la_cdh" in out.columns
+
+
+def test_add_weather_features_chunks_long_range(tmp_path: Path, monkeypatch) -> None:
+    """Spans > _MAX_HOURLY_CHUNK should trigger multiple Meteostat hourly() calls per location."""
+    periods = 701 * 24
+    df = _make_hourly_df("2020-01-01 00:00:00", periods)
+    df["hour"] = df["HR"]
+    input_file = tmp_path / "lags.csv"
+    df.to_csv(input_file, index=False)
+
+    import load_forecasting_cali.weather as weather_mod
+
+    calls: list[tuple[datetime, datetime]] = []
+
+    class StubHourly:
+        def __init__(self, _coords, start, end):
+            self.start = start
+            self.end = end
+
+        def fetch(self):
+            idx = pd.date_range(self.start, self.end, freq="h")
+            out = pd.DataFrame({"temp": [20.0] * len(idx)}, index=idx)
+            out.index.name = "time"
+            return out
+
+    def tracking_hourly(coords, start, end):
+        calls.append((start, end))
+        return StubHourly(coords, start, end)
+
+    monkeypatch.setattr(weather_mod, "hourly", tracking_hourly)
+
+    output_file = tmp_path / "final_long.csv"
+    weather_mod.add_weather_features(input_file, output_file)
+
+    assert len(calls) >= 4
+    assert all(s <= e for s, e in calls)
