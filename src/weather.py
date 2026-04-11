@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 import pandas as pd
-from meteostat import Point, hourly
+from meteostat import Point, Hourly
 
 # Meteostat blocks a single hourly() call spanning more than ~3 years.
 _MAX_HOURLY_CHUNK = timedelta(days=700)
@@ -15,7 +15,7 @@ def _fetch_hourly_temperature(coords: Point, start: datetime, end: datetime) -> 
     chunk_start = start
     while chunk_start <= end:
         chunk_end = min(end, chunk_start + _MAX_HOURLY_CHUNK)
-        data = hourly(coords, chunk_start, chunk_end)
+        data = Hourly(coords, chunk_start, chunk_end)
         part = data.fetch()
         if part is not None and not part.empty and "temp" in part.columns:
             frames.append(part[["temp"]])

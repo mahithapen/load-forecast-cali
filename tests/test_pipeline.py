@@ -5,9 +5,45 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import load_forecasting_cali.model as model_mod
+import load_forecasting_cali.weather as weather_mod
 from load_forecasting_cali.data import merge_caiso_data
 from load_forecasting_cali.features import add_calendar_features, add_lag_features
-from load_forecasting_cali.model import train_load_forecaster
+
+
+class StubXGBRegressor:
+    """Substitute for XGBRegressor: supports DataFrame (holdout) and ndarray (time-series CV) predict."""
+
+    def fit(self, X, y):
+        return self
+
+    def predict(self, X):
+        if isinstance(X, pd.DataFrame):
+            m = float(X["hour"].mean())
+            return [m] * len(X)
+        arr = np.asarray(X)
+        m = float(arr[:, 0].mean()) if arr.ndim == 2 else float(arr.mean())
+        return np.full(arr.shape[0], m)
+
+
+class StubHourly:
+    def __init__(self, _coords, start, end):
+        self.start = start
+        self.end = end
+
+    def fetch(self):
+        idx = pd.date_range(self.start, self.end, freq="h")
+        out = pd.DataFrame({"temp": [20.0] * len(idx)}, index=idx)
+        out.index.name = "time"
+        return out
+
+
+def _make_tracking_Hourly(calls: list[tuple[datetime, datetime]]):
+    def tracking_Hourly(coords, start, end):
+        calls.append((start, end))
+        return StubHourly(coords, start, end)
+
+    return tracking_Hourly
 
 
 def _make_hourly_df(start: str, periods: int) -> pd.DataFrame:
@@ -80,18 +116,9 @@ def test_train_load_forecaster_stubbed(tmp_path: Path, monkeypatch) -> None:
     input_file = tmp_path / "ready.csv"
     df.to_csv(input_file, index=False)
 
-    class StubModel:
-        def fit(self, X, y):
-            return self
-
-        def predict(self, X):
-            return [float(X["hour"].mean())] * len(X)
-
-    import load_forecasting_cali.model as model_mod
-
-    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubModel())
+    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubXGBRegressor())
     plot_file = tmp_path / "plot.png"
-    metrics = train_load_forecaster(input_file, plot_file)
+    metrics = model_mod.train_load_forecaster(input_file, plot_file)
 
     assert plot_file.exists()
     assert "mae" in metrics
@@ -117,18 +144,9 @@ def test_train_holdout_last_months_stubbed(tmp_path: Path, monkeypatch) -> None:
     input_file = tmp_path / "ready.csv"
     df.to_csv(input_file, index=False)
 
-    class StubModel:
-        def fit(self, X, y):
-            return self
-
-        def predict(self, X):
-            return [float(X["hour"].mean())] * len(X)
-
-    import load_forecasting_cali.model as model_mod
-
-    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubModel())
+    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubXGBRegressor())
     plot_file = tmp_path / "plot_months.png"
-    metrics = train_load_forecaster(
+    metrics = model_mod.train_load_forecaster(
         input_file,
         plot_file,
         validation="holdout_last_months",
@@ -157,20 +175,9 @@ def test_train_time_series_cv_stubbed(tmp_path: Path, monkeypatch) -> None:
     input_file = tmp_path / "ready.csv"
     df.to_csv(input_file, index=False)
 
-    class StubModel:
-        def fit(self, X, y):
-            return self
-
-        def predict(self, X):
-            arr = np.asarray(X)
-            m = float(arr[:, 0].mean()) if arr.ndim == 2 else float(arr.mean())
-            return np.full(arr.shape[0], m)
-
-    import load_forecasting_cali.model as model_mod
-
-    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubModel())
+    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubXGBRegressor())
     plot_file = tmp_path / "plot_cv.png"
-    metrics = train_load_forecaster(
+    metrics = model_mod.train_load_forecaster(
         input_file,
         plot_file,
         validation="time_series_cv",
@@ -190,20 +197,11 @@ def test_add_weather_features_stubbed(tmp_path: Path, monkeypatch) -> None:
     input_file = tmp_path / "lags.csv"
     df.to_csv(input_file, index=False)
 
-    import load_forecasting_cali.weather as weather_mod
-
-    class StubHourly:
-        def __init__(self, _coords, start, end):
-            self.start = start
-            self.end = end
-
-        def fetch(self):
-            idx = pd.date_range(self.start, self.end, freq="h")
-            out = pd.DataFrame({"temp": [20.0] * len(idx)}, index=idx)
-            out.index.name = "time"
-            return out
-
-    monkeypatch.setattr(weather_mod, "hourly", lambda coords, start, end: StubHourly(coords, start, end))
+    monkeypatch.setattr(
+        weather_mod,
+        "Hourly",
+        lambda coords, start, end: StubHourly(coords, start, end),
+    )
 
     output_file = tmp_path / "final.csv"
     out = weather_mod.add_weather_features(input_file, output_file)
@@ -222,26 +220,8 @@ def test_add_weather_features_chunks_long_range(tmp_path: Path, monkeypatch) -> 
     input_file = tmp_path / "lags.csv"
     df.to_csv(input_file, index=False)
 
-    import load_forecasting_cali.weather as weather_mod
-
     calls: list[tuple[datetime, datetime]] = []
-
-    class StubHourly:
-        def __init__(self, _coords, start, end):
-            self.start = start
-            self.end = end
-
-        def fetch(self):
-            idx = pd.date_range(self.start, self.end, freq="h")
-            out = pd.DataFrame({"temp": [20.0] * len(idx)}, index=idx)
-            out.index.name = "time"
-            return out
-
-    def tracking_hourly(coords, start, end):
-        calls.append((start, end))
-        return StubHourly(coords, start, end)
-
-    monkeypatch.setattr(weather_mod, "hourly", tracking_hourly)
+    monkeypatch.setattr(weather_mod, "Hourly", _make_tracking_Hourly(calls))
 
     output_file = tmp_path / "final_long.csv"
     weather_mod.add_weather_features(input_file, output_file)
