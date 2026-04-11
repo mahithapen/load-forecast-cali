@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import numpy as np
 import pandas as pd
 
 from load_forecasting_cali.data import merge_caiso_data
@@ -95,6 +96,92 @@ def test_train_load_forecaster_stubbed(tmp_path: Path, monkeypatch) -> None:
     assert plot_file.exists()
     assert "mae" in metrics
     assert "mape" in metrics
+    assert metrics["validation"] == "holdout_ratio"
+    assert metrics["test_ratio"] == 0.2
+
+
+def test_train_holdout_last_months_stubbed(tmp_path: Path, monkeypatch) -> None:
+    periods = 500 * 24
+    df = _make_hourly_df("2023-01-01 00:00:00", periods)
+    df["hour"] = df["HR"]
+    df["day_of_week"] = 1
+    df["month"] = 1
+    df["is_weekend"] = 0
+    df["is_holiday"] = 0
+    df["is_peak_hour"] = 0
+    df["load_lag_24"] = df["CAISO"].shift(24)
+    df["load_lag_168"] = df["CAISO"].shift(168)
+    df["load_rolling_mean_24"] = df["CAISO"].shift(24).rolling(24).mean()
+    df = df.dropna()
+
+    input_file = tmp_path / "ready.csv"
+    df.to_csv(input_file, index=False)
+
+    class StubModel:
+        def fit(self, X, y):
+            return self
+
+        def predict(self, X):
+            return [float(X["hour"].mean())] * len(X)
+
+    import load_forecasting_cali.model as model_mod
+
+    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubModel())
+    plot_file = tmp_path / "plot_months.png"
+    metrics = train_load_forecaster(
+        input_file,
+        plot_file,
+        validation="holdout_last_months",
+        test_months=6,
+    )
+
+    assert plot_file.exists()
+    assert metrics["validation"] == "holdout_last_months"
+    assert metrics["test_months"] == 6
+    assert "mae" in metrics
+
+
+def test_train_time_series_cv_stubbed(tmp_path: Path, monkeypatch) -> None:
+    df = _make_hourly_df("2024-01-01 00:00:00", 400)
+    df["hour"] = df["HR"]
+    df["day_of_week"] = 1
+    df["month"] = 1
+    df["is_weekend"] = 0
+    df["is_holiday"] = 0
+    df["is_peak_hour"] = 0
+    df["load_lag_24"] = df["CAISO"].shift(24)
+    df["load_lag_168"] = df["CAISO"].shift(168)
+    df["load_rolling_mean_24"] = df["CAISO"].shift(24).rolling(24).mean()
+    df = df.dropna()
+
+    input_file = tmp_path / "ready.csv"
+    df.to_csv(input_file, index=False)
+
+    class StubModel:
+        def fit(self, X, y):
+            return self
+
+        def predict(self, X):
+            arr = np.asarray(X)
+            m = float(arr[:, 0].mean()) if arr.ndim == 2 else float(arr.mean())
+            return np.full(arr.shape[0], m)
+
+    import load_forecasting_cali.model as model_mod
+
+    monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubModel())
+    plot_file = tmp_path / "plot_cv.png"
+    metrics = train_load_forecaster(
+        input_file,
+        plot_file,
+        validation="time_series_cv",
+        time_series_cv_splits=5,
+    )
+
+    assert plot_file.exists()
+    assert metrics["validation"] == "time_series_cv"
+    assert len(metrics["fold_mae"]) == 5
+    assert "mae_std" in metrics
+    assert "mape_std" in metrics
 
 
 def test_add_weather_features_stubbed(tmp_path: Path, monkeypatch) -> None:

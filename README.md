@@ -56,6 +56,8 @@ Train the model:
 load-forecast train --input-file caiso_model_ready.csv --plot-file forecast_check.png
 ```
 
+Validation options (time-ordered only): `--validation holdout-ratio` (default, `--test-ratio 0.2`), `--validation holdout-months` (fixed test window, `--test-months 6`), or `--validation time-series-cv` (expanding-window `TimeSeriesSplit`, `--cv-splits 5`; reports mean and std of MAE/MAPE across folds).
+
 ## Running Tests
 
 ```bash
