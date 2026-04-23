@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from data import merge_caiso_data
-from features import add_calendar_features, add_lag_features
-from weather import add_weather_features
-from model import train_load_forecaster
+from .data import merge_caiso_data
+from .features import add_calendar_features, add_lag_features
+from .weather import add_weather_features
+from .model import train_load_forecaster
 
 
 def _default_paths():
@@ -73,7 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of folds for time-series-cv (default 5).",
     )
 
-    pipe = subparsers.add_parser("pipeline", help="Run merge -> calendar -> lags.")
+    pipe = subparsers.add_parser(
+        "pipeline", help="Run merge -> calendar -> lags.")
     pipe.add_argument("--input-dir", default=paths["raw_dir"])
     pipe.add_argument("--merged-file", default=paths["merged"])
     pipe.add_argument("--features-file", default=paths["features"])
