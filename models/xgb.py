@@ -1,4 +1,4 @@
-from load_forecasting_cali.model import train_load_forecaster
+from model import train_load_forecaster
 
 
 if __name__ == "__main__":

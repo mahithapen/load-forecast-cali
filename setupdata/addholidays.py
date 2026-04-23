@@ -1,4 +1,4 @@
-from load_forecasting_cali.features import add_calendar_features
+from features import add_calendar_features
 
 
 if __name__ == "__main__":

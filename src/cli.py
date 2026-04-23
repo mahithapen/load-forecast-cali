@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from load_forecasting_cali.data import merge_caiso_data
-from load_forecasting_cali.features import add_calendar_features, add_lag_features
-from load_forecasting_cali.weather import add_weather_features
-from load_forecasting_cali.model import train_load_forecaster
+from data import merge_caiso_data
+from features import add_calendar_features, add_lag_features
+from weather import add_weather_features
+from model import train_load_forecaster
 
 
 def _default_paths():

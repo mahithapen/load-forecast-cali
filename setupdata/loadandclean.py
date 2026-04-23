@@ -1,4 +1,4 @@
-from load_forecasting_cali.data import merge_caiso_data
+from data import merge_caiso_data
 
 
 if __name__ == "__main__":

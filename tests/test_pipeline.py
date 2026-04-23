@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import pandas as pd
 
-from load_forecasting_cali.data import merge_caiso_data
-from load_forecasting_cali.features import add_calendar_features, add_lag_features
-from load_forecasting_cali.model import train_load_forecaster
+from data import merge_caiso_data
+from features import add_calendar_features, add_lag_features
+from model import train_load_forecaster
 
 
 def _make_hourly_df(start: str, periods: int) -> pd.DataFrame:
@@ -85,7 +85,7 @@ def test_train_load_forecaster_stubbed(tmp_path: Path, monkeypatch) -> None:
         def predict(self, X):
             return [float(X["hour"].mean())] * len(X)
 
-    import load_forecasting_cali.model as model_mod
+    import model as model_mod
 
     monkeypatch.setattr(model_mod.xgb, "XGBRegressor", lambda **_: StubModel())
     plot_file = tmp_path / "plot.png"
@@ -102,7 +102,7 @@ def test_add_weather_features_stubbed(tmp_path: Path, monkeypatch) -> None:
     input_file = tmp_path / "lags.csv"
     df.to_csv(input_file, index=False)
 
-    import load_forecasting_cali.weather as weather_mod
+    import weather as weather_mod
 
     class StubHourly:
         def __init__(self, _coords, start, end):
