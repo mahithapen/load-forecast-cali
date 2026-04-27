@@ -11,12 +11,12 @@ from .model import train_load_forecaster
 
 def _default_paths():
     return {
-        "raw_dir": Path("caiso_load_data"),
-        "merged": Path("caiso_load_complete.csv"),
-        "features": Path("caiso_features.csv"),
-        "lags": Path("caiso_model_ready.csv"),
-        "final": Path("caiso_final_dataset.csv"),
-        "plot": Path("forecast_check.png"),
+        "raw_dir": Path("data/raw/caiso_load_data"),
+        "merged": Path("data/processed/caiso_load_complete.csv"),
+        "features": Path("data/processed/caiso_features.csv"),
+        "lags": Path("data/processed/caiso_model_ready.csv"),
+        "final": Path("data/processed/caiso_final_dataset.csv"),
+        "plot": Path("artifacts/forecast_check.png"),
     }
 
 

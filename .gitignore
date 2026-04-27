@@ -9,14 +9,11 @@ dist/
 *.egg-info/
 .coverage
 
-# Data artifacts
-*.csv
-*.xlsx
+# Data (keep out of git; store under data/)
+data/
 
-# Model and plot artifacts
-*.png
-*.pkl
-*.joblib
+# Outputs / artifacts
+artifacts/
 
 # OS/editor
 .DS_Store
