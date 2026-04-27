@@ -2,6 +2,10 @@
 
 This project builds a reproducible pipeline to forecast hourly electricity load for the California Independent System Operator (CAISO). It merges raw CAISO load spreadsheets, engineers calendar and lag features, optionally adds weather data, and trains an XGBoost regressor for short-term forecasting.
 
+
+## Motivation 
+The project was inspired by our groups interest in energy and weather. Last year, the four of us learned from traders at Millenium how they use weather data to be able to forecast energy load. This is then used to make trades on energy bonds. We decided that we could disclose this experiment to the California load and test how our model does.
+
 ## Dataset
 The raw dataset consists of CAISO historical hourly load Excel files. By default, raw files live under `data/raw/` and derived datasets live under `data/processed/` (both are ignored by git).
 
@@ -47,12 +51,33 @@ The training module supports multiple strategies to ensure forecast reliability:
 * **`holdout-months`**: Uses the last $N$ calendar months as the test set.
 * **`time-series-cv`**: Employs an expanding-window `TimeSeriesSplit` and reports mean/std across folds.
 
+## Model validation results
+Most recent local run on `caiso_model_ready.csv`:
+
+* **Holdout (last 20% as test)**: MAE **794.50 MW**, MAPE **3.02%**
+* **Holdout (last 6 months as test)**: MAE **900.78 MW**, MAPE **3.15%**
+* **Time-series CV (5 folds)**: MAE **813.35 MW** (std **35.05 MW**), MAPE **3.13%** (std **0.05%**)
+
+### Analysis (what these numbers mean)
+Overall, the model achieves **~3% MAPE**, meaning typical hourly forecast errors are on the order of **3% of actual CAISO load**. In absolute terms, the **MAE of ~795–901 MW** indicates the average miss is under 1 GW, which is reasonable for a single-model baseline on a large regional grid load series.
+
+The **last-6-months holdout** is slightly worse than the last-20%-rows split. This is expected because “last \(N\) months” often concentrates evaluation on a **specific season/regime** (e.g., summer heat, winter storms, changing demand patterns), which can be harder if those conditions are underrepresented in the training period.
+
+The **time-series CV results are stable**: MAE std is **35 MW** and MAPE std is **0.05%** across folds, suggesting performance is **consistent across different historical test windows** rather than being driven by a single favorable split.
+
 ## Running Tests
 The project is configured for rigorous testing to maintain high code quality. To run the test suite and view the coverage report:
 
 ```bash
 pytest
 ```
+
+### Model testing approach (unit + validation testing)
+We test the model code in two complementary ways:
+
+* **Unit tests on the training pipeline**: `tests/test_model.py` runs `train_load_forecaster(...)` on a small synthetic dataset and checks that it returns the expected metrics keys (MAE/MAPE) and uses the requested validation mode.
+* **Validation-mode coverage**: `tests/test_model_validation.py` exercises multiple validation strategies (chronological holdout and time-series CV) to ensure the split logic works and produces well-formed outputs.
+* **Deterministic, fast tests**: the tests are designed to run quickly and avoid external dependencies; for example, weather-related logic is tested with mocks rather than live API calls.
 
 ### Latest coverage result
 Most recent local run (with `pytest-cov`) achieved **82% total coverage**:
