@@ -50,6 +50,7 @@ The training module supports multiple strategies to ensure forecast reliability:
 * **`holdout-ratio`**: Chronological split using the last fraction of data for testing (default).
 * **`holdout-months`**: Uses the last $N$ calendar months as the test set.
 * **`time-series-cv`**: Employs an expanding-window `TimeSeriesSplit` and reports mean/std across folds.
+* **`tune` (grid search)**: Runs a small, reproducible hyperparameter search using expanding-window time-series CV; selects the configuration that minimizes mean MAE across folds.
 
 ## Model validation results
 Most recent local run on `caiso_model_ready.csv`:
@@ -64,6 +65,23 @@ Overall, the model achieves **~3% MAPE**, meaning typical hourly forecast errors
 The **last-6-months holdout** is slightly worse than the last-20%-rows split. This is expected because “last \(N\) months” often concentrates evaluation on a **specific season/regime** (e.g., summer heat, winter storms, changing demand patterns), which can be harder if those conditions are underrepresented in the training period.
 
 The **time-series CV results are stable**: MAE std is **35 MW** and MAPE std is **0.05%** across folds, suggesting performance is **consistent across different historical test windows** rather than being driven by a single favorable split.
+
+## Hyperparameter tuning (time-series CV grid search)
+We also support a small deterministic grid search over XGBoost hyperparameters and select the setting which **minimizes mean MAE** across expanding-window CV folds.
+
+Example:
+
+```bash
+load-forecast tune --input-file caiso_model_ready.csv --cv-splits 5
+```
+
+Most recent tuning run (grid: `n_estimators ∈ {100,200,400}`, `learning_rate ∈ {0.05,0.1}`, `max_depth ∈ {4,6,8}`) selected:
+
+* **Best params**: `n_estimators=200`, `learning_rate=0.05`, `max_depth=6`
+* **CV MAE**: **813.35 MW** (std **35.05 MW**)
+* **CV MAPE**: **3.13%** (std **0.05%**)
+
+In this grid, the selected hyperparameters matched our baseline settings, which suggests the original configuration was already near-optimal within a reasonable search range. This still strengthens the project by demonstrating a **reproducible model selection process** and reducing the risk that results come from arbitrary parameter choices.
 
 ## Running Tests
 The project is configured for rigorous testing to maintain high code quality. To run the test suite and view the coverage report:
@@ -83,8 +101,8 @@ We test the model code in two complementary ways:
 Most recent local run (with `pytest-cov`) achieved **82% total coverage**:
 
 ```text
-TOTAL               273     49    82%
-8 passed in 17.97s
+TOTAL               318     61    81%
+9 passed in 17.87s
 ```
 
 Coverage targets and testing paths are defined in `pyproject.toml`.

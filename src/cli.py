@@ -6,7 +6,7 @@ from pathlib import Path
 from .data import merge_caiso_data
 from .features import add_calendar_features, add_lag_features
 from .weather import add_weather_features
-from .model import train_load_forecaster
+from .model import train_load_forecaster, tune_load_forecaster
 
 
 def _default_paths():
@@ -73,6 +73,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of folds for time-series-cv (default 5).",
     )
 
+    tune = subparsers.add_parser(
+        "tune",
+        help="Small grid search over XGBoost hyperparameters (time-series CV).",
+    )
+    tune.add_argument("--input-file", default=paths["lags"])
+    tune.add_argument("--cv-splits", type=int, default=5)
+    tune.add_argument("--n-estimators", default="100,200,400")
+    tune.add_argument("--learning-rate", default="0.05,0.1")
+    tune.add_argument("--max-depth", default="4,6,8")
+
     pipe = subparsers.add_parser(
         "pipeline", help="Run merge -> calendar -> lags.")
     pipe.add_argument("--input-dir", default=paths["raw_dir"])
@@ -118,6 +128,31 @@ def main() -> int:
             time_series_cv_splits=args.cv_splits,
         )
         _print_train_metrics(metrics)
+    elif args.command == "tune":
+        n_estimators_grid = [int(x) for x in str(args.n_estimators).split(",") if x.strip()]
+        learning_rate_grid = [float(x) for x in str(args.learning_rate).split(",") if x.strip()]
+        max_depth_grid = [int(x) for x in str(args.max_depth).split(",") if x.strip()]
+
+        out = tune_load_forecaster(
+            args.input_file,
+            time_series_cv_splits=args.cv_splits,
+            n_estimators_grid=n_estimators_grid,
+            learning_rate_grid=learning_rate_grid,
+            max_depth_grid=max_depth_grid,
+        )
+        best = out["best"]
+        p = best["params"]
+        print("Best params (by mean MAE across folds):")
+        print(
+            f"  n_estimators={p['n_estimators']}, learning_rate={p['learning_rate']}, "
+            f"max_depth={p['max_depth']}"
+        )
+        print(
+            f"CV MAE:  {best['mae']:.2f} MW (std {best['mae_std']:.2f})"
+        )
+        print(
+            f"CV MAPE: {best['mape']:.2%} (std {best['mape_std']:.2%})"
+        )
     elif args.command == "pipeline":
         merge_caiso_data(args.input_dir, args.merged_file)
         add_calendar_features(args.merged_file, args.features_file)

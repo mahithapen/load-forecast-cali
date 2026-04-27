@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterable, Literal, Optional
+from itertools import product
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
@@ -26,6 +27,103 @@ DEFAULT_FEATURES: list[str] = [
 ]
 
 ValidationMode = Literal["holdout_ratio", "holdout_last_months", "time_series_cv"]
+
+
+def _load_and_prepare(
+    input_file: str | Path,
+    feature_list: list[str],
+    *,
+    target: str = "CAISO",
+) -> pd.DataFrame:
+    input_file = Path(input_file)
+    if not input_file.exists():
+        raise FileNotFoundError(f"Missing input file: {input_file}")
+
+    df = pd.read_csv(input_file)
+    df["DATE"] = pd.to_datetime(df["DATE"])
+    df["DATE_TIME"] = df["DATE"] + pd.to_timedelta(df["hour"], unit="h")
+    df = df.dropna(subset=feature_list + [target])
+    df = df.sort_values("DATE_TIME").reset_index(drop=True)
+
+    if len(df) < 10:
+        raise ValueError("Not enough rows to train after dropping NaNs.")
+    return df
+
+
+def tune_load_forecaster(
+    input_file: str | Path,
+    *,
+    features: Optional[Iterable[str]] = None,
+    time_series_cv_splits: int = 5,
+    n_estimators_grid: Iterable[int] = (100, 200, 400),
+    learning_rate_grid: Iterable[float] = (0.05, 0.1),
+    max_depth_grid: Iterable[int] = (4, 6, 8),
+    random_state: int = 0,
+) -> dict:
+    """Small deterministic grid search using expanding-window time-series CV.
+
+    Selects hyperparameters by **minimizing mean MAE** across folds.
+    """
+    feature_list = list(features) if features is not None else DEFAULT_FEATURES
+    df = _load_and_prepare(input_file, feature_list)
+    target = "CAISO"
+
+    if time_series_cv_splits < 2:
+        raise ValueError("time_series_cv_splits must be at least 2.")
+
+    X = df[feature_list].to_numpy()
+    y = df[target].to_numpy()
+    tsc = TimeSeriesSplit(n_splits=time_series_cv_splits)
+
+    results: list[dict] = []
+
+    for n_estimators, learning_rate, max_depth in product(
+        list(n_estimators_grid),
+        list(learning_rate_grid),
+        list(max_depth_grid),
+    ):
+        fold_mae: list[float] = []
+        fold_mape: list[float] = []
+
+        for train_idx, test_idx in tsc.split(X):
+            X_train, X_test = X[train_idx], X[test_idx]
+            y_train, y_test = y[train_idx], y[test_idx]
+
+            model = xgb.XGBRegressor(
+                n_estimators=int(n_estimators),
+                learning_rate=float(learning_rate),
+                max_depth=int(max_depth),
+                objective="reg:squarederror",
+                random_state=random_state,
+            )
+            model.fit(X_train, y_train)
+            preds = model.predict(X_test)
+            fold_mae.append(float(mean_absolute_error(y_test, preds)))
+            fold_mape.append(float(mean_absolute_percentage_error(y_test, preds)))
+
+        results.append(
+            {
+                "params": {
+                    "n_estimators": int(n_estimators),
+                    "learning_rate": float(learning_rate),
+                    "max_depth": int(max_depth),
+                    "random_state": int(random_state),
+                    "objective": "reg:squarederror",
+                },
+                "mae": float(np.mean(fold_mae)),
+                "mape": float(np.mean(fold_mape)),
+                "mae_std": float(np.std(fold_mae)),
+                "mape_std": float(np.std(fold_mape)),
+            }
+        )
+
+    best = sorted(results, key=lambda r: (r["mae"], r["mape"]))[0]
+    return {
+        "validation": "time_series_cv_grid_search",
+        "time_series_cv_splits": int(time_series_cv_splits),
+        "best": best,
+        "results": results,
+    }
 
 
 def _split_holdout_ratio(df: pd.DataFrame, test_ratio: float) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -64,22 +162,9 @@ def train_load_forecaster(
     * ``time_series_cv`` — expanding-window CV;
       reports mean and std of MAE/MAPE across folds (and per-fold lists). The plot shows the last fold's test segment.
     """
-    input_file = Path(input_file)
-    if not input_file.exists():
-        raise FileNotFoundError(f"Missing input file: {input_file}")
-
-    df = pd.read_csv(input_file)
-    df["DATE"] = pd.to_datetime(df["DATE"])
-    df["DATE_TIME"] = df["DATE"] + pd.to_timedelta(df["hour"], unit="h")
-
     feature_list = list(features) if features is not None else DEFAULT_FEATURES
     target = "CAISO"
-
-    df = df.dropna(subset=feature_list + [target])
-    df = df.sort_values("DATE_TIME").reset_index(drop=True)
-
-    if len(df) < 10:
-        raise ValueError("Not enough rows to train after dropping NaNs.")
+    df = _load_and_prepare(input_file, feature_list, target=target)
 
     if validation == "time_series_cv":
         return _train_time_series_cv(
