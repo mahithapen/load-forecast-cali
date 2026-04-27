@@ -37,6 +37,15 @@ Execute the standard sequence (merge → calendar → lags) in one command:
 load-forecast pipeline
 ```
 
+## Plots
+The following plots are included for quick visualization in GitHub. Fresh runs will write plots to `artifacts/` by default.
+
+### Forecast sanity check (example 7-day segment)
+![Forecast check](docs/figures/forecast_check.png)
+
+### Load patterns (EDA)
+![Load patterns](docs/figures/load_patterns.png)
+
 ### Individual Steps
 For granular control, run steps individually:
 * **Merge Data**: `load-forecast merge --input-dir data/raw/caiso_load_data --output-file data/processed/caiso_load_complete.csv`
