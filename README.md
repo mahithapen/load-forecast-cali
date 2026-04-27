@@ -53,6 +53,15 @@ The project is configured for rigorous testing to maintain high code quality. To
 ```bash
 pytest
 ```
+
+### Latest coverage result
+Most recent local run (with `pytest-cov`) achieved **82% total coverage**:
+
+```text
+TOTAL               273     49    82%
+8 passed in 17.97s
+```
+
 Coverage targets and testing paths are defined in `pyproject.toml`.
 
 ## Project Structure
