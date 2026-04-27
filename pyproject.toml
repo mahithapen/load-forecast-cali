@@ -17,7 +17,7 @@ dependencies = [
   "xgboost>=2.0",
   "matplotlib>=3.7",
   "holidays>=0.38",
-  "meteostat>=1.6",
+  "meteostat>=1.6,<2",
   "openpyxl>=3.1",
 ]
 

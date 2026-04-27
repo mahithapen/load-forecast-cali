@@ -23,7 +23,7 @@ def test_add_lag_features(tmp_path):
     output_csv = tmp_path / "lags.csv"
 
     # Create 200 hours of data to satisfy the 168-hour lag requirement
-    dates = pd.date_range("2023-01-01", periods=200, freq="H")
+    dates = pd.date_range("2023-01-01", periods=200, freq="h")
     df = pd.DataFrame({
         "DATE": dates.date,
         "hour": dates.hour,

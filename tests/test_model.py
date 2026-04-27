@@ -7,7 +7,7 @@ def test_train_load_forecaster(tmp_path):
     input_csv = tmp_path / "ready.csv"
 
     # Create dummy dataset with enough rows for a split
-    dates = pd.date_range("2023-01-01", periods=100, freq="H")
+    dates = pd.date_range("2023-01-01", periods=100, freq="h")
     df = pd.DataFrame({
         "DATE": dates.date,
         "hour": dates.hour,
